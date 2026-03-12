@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from agent.fetcher import fetch_all_feeds, filter_recent, load_sources
 from agent.filter import deduplicate, limit_per_category
+from agent.publisher import publish_to_slack
 from agent.summarizer import summarize_digest
 
 load_dotenv()
@@ -51,6 +52,11 @@ def main():
             if a.get("ai_summary"):
                 print(f"  {a['ai_summary']}")
             print(f"  {a['url']}")
+
+    if publish_to_slack(digest):
+        logger.info("Digest delivered to Slack")
+    else:
+        logger.warning("Slack delivery skipped or failed")
 
 
 if __name__ == "__main__":
