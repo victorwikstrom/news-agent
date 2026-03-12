@@ -25,7 +25,7 @@ def summarize_article(client: anthropic.Anthropic, article: dict) -> str | None:
     for attempt in range(3):
         try:
             response = client.messages.create(
-                model="claude-3-5-haiku",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=256,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_message}],
@@ -54,7 +54,7 @@ def generate_digest_headline(client: anthropic.Anthropic, categories: dict[str, 
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-5-20250514",
+            model="claude-haiku-4-5-20251001",
             max_tokens=100,
             system="You write short, punchy news digest headlines. Respond with a single one-line headline.",
             messages=[{"role": "user", "content": f"Write a headline for today's news digest:\n\n{overview}"}],
