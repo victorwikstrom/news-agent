@@ -1,10 +1,11 @@
 import logging
 import os
-from collections import defaultdict
 
 from dotenv import load_dotenv
 
 from agent.fetcher import fetch_all_feeds, filter_recent, load_sources
+from agent.filter import deduplicate, limit_per_category
+from agent.summarizer import summarize_digest
 
 load_dotenv()
 
@@ -29,18 +30,26 @@ def main():
         logger.warning("No recent articles found")
         return
 
-    grouped: dict[str, list[dict]] = defaultdict(list)
-    for article in articles:
-        grouped[article["category"]].append(article)
+    articles = deduplicate(articles)
+    articles = limit_per_category(articles)
+    logger.info(f"{len(articles)} articles after filtering")
 
-    for category, items in grouped.items():
-        print(f"\n{'='*60}")
+    digest = summarize_digest(articles)
+
+    print(f"\n{'='*60}")
+    print(f"  {digest['headline']}")
+    print(f"{'='*60}")
+
+    for category, items in digest["categories"].items():
+        print(f"\n{'─'*60}")
         print(f"  {category} ({len(items)} articles)")
-        print(f"{'='*60}")
+        print(f"{'─'*60}")
         for a in items:
             pub = a["published"].strftime("%Y-%m-%d %H:%M") if a["published"] else "unknown"
             print(f"\n  {a['title']}")
             print(f"  Source: {a['source_name']} | Published: {pub}")
+            if a.get("ai_summary"):
+                print(f"  {a['ai_summary']}")
             print(f"  {a['url']}")
 
 
