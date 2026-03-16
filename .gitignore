@@ -15,6 +15,9 @@ build/
 # uv
 .python-version
 
+# Docs 
+docs/
+
 # macOS
 .DS_Store
 

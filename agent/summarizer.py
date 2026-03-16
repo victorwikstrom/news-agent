@@ -7,11 +7,10 @@ import anthropic
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
-    "You are a news editor writing daily briefings.\n"
     "Summarize the article in 2–3 sentences in English.\n"
     "Be factual, concise, and informative.\n"
     "Avoid passive voice. No filler phrases.\n"
-    "If the article is not newsworthy, respond with: SKIP"
+    "Do not add any prefix, label, or heading — respond only with the summary sentences."
 )
 
 
@@ -30,11 +29,7 @@ def summarize_article(client: anthropic.Anthropic, article: dict) -> str | None:
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_message}],
             )
-            text = response.content[0].text.strip()
-            if text == "SKIP":
-                logger.debug(f"Claude skipped: {article['title']}")
-                return None
-            return text
+            return response.content[0].text.strip()
         except Exception as e:
             wait = 2 ** attempt
             logger.warning(f"API error summarizing '{article['title']}' (attempt {attempt + 1}/3): {e}")

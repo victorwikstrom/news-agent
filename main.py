@@ -1,12 +1,14 @@
 import argparse
 import logging
 import os
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
 from agent.fetcher import fetch_all_feeds, filter_recent, load_sources
 from agent.filter import deduplicate, limit_per_category
 from agent.publisher import publish_to_slack, send_email
+from agent.scorer import save_scores, score_with_retry
 from agent.sources import get_sources_for_ids
 from agent.summarizer import summarize_digest
 
@@ -35,10 +37,17 @@ def run_legacy(skip_summarize: bool = False):
         return
 
     articles = deduplicate(articles)
-    articles = limit_per_category(articles)
-    logger.info(f"{len(articles)} articles after filtering")
+    logger.info(f"{len(articles)} articles after deduplication")
 
-    digest = _build_stub_digest(articles) if skip_summarize else summarize_digest(articles)
+    now = datetime.now(timezone.utc)
+    try:
+        scored = score_with_retry(articles, now)
+        logger.info(f"Scorer selected {len(scored)} articles")
+    except Exception:
+        logger.exception("Scorer failed, falling back to limit_per_category")
+        scored = limit_per_category(articles)
+
+    digest = _build_stub_digest(scored) if skip_summarize else summarize_digest(scored)
     _print_digest(digest)
 
     if publish_to_slack(digest):
@@ -90,7 +99,7 @@ def run_per_user(skip_summarize: bool = False):
 
             logger.info(f"User {user_id}: fetching {len(sources)} source(s)")
 
-            # Pipeline: fetch → filter → deduplicate → limit → summarize
+            # Pipeline: fetch → filter → deduplicate → score → summarize
             articles = fetch_all_feeds(sources)
             articles = filter_recent(articles, hours=24)
 
@@ -99,10 +108,20 @@ def run_per_user(skip_summarize: bool = False):
                 continue
 
             articles = deduplicate(articles)
-            articles = limit_per_category(articles)
-            logger.info(f"User {user_id}: {len(articles)} articles after filtering")
+            logger.info(f"User {user_id}: {len(articles)} articles after deduplication")
 
-            digest = _build_stub_digest(articles) if skip_summarize else summarize_digest(articles)
+            now = datetime.now(timezone.utc)
+            try:
+                scored = score_with_retry(articles, now)
+                logger.info(f"User {user_id}: scorer selected {len(scored)} articles")
+                # Save scores to Supabase for observability
+                rejected = [a for a in articles if a not in scored]
+                save_scores(sb, scored, rejected, now)
+            except Exception:
+                logger.exception(f"User {user_id}: scorer failed, falling back to limit_per_category")
+                scored = limit_per_category(articles)
+
+            digest = _build_stub_digest(scored) if skip_summarize else summarize_digest(scored)
 
             # Publish via chosen channel
             if channel == "slack":
